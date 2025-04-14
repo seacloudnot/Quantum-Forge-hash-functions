@@ -11,7 +11,6 @@ from datetime import datetime
 
 from ..models.quantum_metrics import QuantumMetrics
 
-logger = logging.getLogger(__name__)
 
 @dataclass
 class EntropyMetrics:
