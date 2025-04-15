@@ -7,7 +7,6 @@ This module provides a state-of-the-art quantum-resistant hashing mechanism with
 - High-dimensional transformations
 - Enhanced polynomial mixing
 - Quantum-resistant lattice operations
-- Extended Benford's Law
 - Advanced chaotic mixing
 - Zero-Knowledge Proof system
 - Quantum entropy pooling
@@ -34,7 +33,6 @@ class UnifiedQuantumHash:
     - High-dimensional transformations
     - Enhanced polynomial mixing
     - Quantum-resistant lattice operations
-    - Extended Benford's Law
     - Advanced chaotic mixing
     - Zero-Knowledge Proof system
     - Quantum entropy pooling
