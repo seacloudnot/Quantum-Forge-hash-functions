@@ -1,5 +1,5 @@
 """
-Enhanced Unified Quantum-Resistant Hash Implementation for Quantum Forge 2.
+Enhanced Unified Quantum-Resistant Hash Implementation for Quantum Forge.
 
 This module provides a state-of-the-art quantum-resistant hashing mechanism with:
 - Multi-layer SHA3 with adaptive security
