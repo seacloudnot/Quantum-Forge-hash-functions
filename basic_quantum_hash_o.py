@@ -3,7 +3,7 @@ Enhanced Unified Quantum-Resistant Hash Implementation for Quantum Forge.
 
 This module provides a state-of-the-art quantum-resistant hashing mechanism with:
 - Multi-layer SHA3 with adaptive security
-- Advanced tetryonic transformations
+- Advanced geometric transformations
 - High-dimensional transformations
 - Enhanced polynomial mixing
 - Quantum-resistant lattice operations
@@ -29,7 +29,7 @@ class UnifiedQuantumHash:
     Enhanced Unified Quantum-Resistant Hash Implementation
     Features:
     - Multi-layer SHA3 with adaptive security
-    - Advanced tetryonic transformations
+    - Advanced geometric transformations
     - High-dimensional transformations
     - Enhanced polynomial mixing
     - Quantum-resistant lattice operations
@@ -92,7 +92,7 @@ class UnifiedQuantumHash:
             self._last_entropy_refresh = current_time
 
     def _advanced_tetryonic_transform(self, data: bytes) -> bytes:
-        """Enhanced tetryonic geometric transformations with encryption."""
+        """Enhanced geometric transformations with encryption."""
         state = list(data)
         entropy_stream = self.entropy_pool.get_entropy(len(data))
         
