@@ -183,10 +183,6 @@ class UnifiedQuantumHash:
     def _high_dimensional_transform(self, data: bytes) -> bytes:
         """
         Perform high-dimensional transformations using hashgraph principles:
-        - Uses directed acyclic graph (DAG) structure
-        - Implements virtual voting mechanism
-        - Maintains event synchronization
-        - Ensures Byzantine fault tolerance
         """
         # Reshape state to match security level dimensions
         state = np.frombuffer(data, dtype=np.uint8)
