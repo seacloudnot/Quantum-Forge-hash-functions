@@ -14,7 +14,7 @@ This module provides a state-of-the-art quantum-resistant hashing mechanism with
 - Time-lock puzzles
 """
 
-from typing import Any, Union, List, Optional
+from typing import Any, Union, List, Optional, Tuple
 import hashlib
 import numpy as np
 import random
@@ -40,9 +40,6 @@ class UnifiedQuantumHash:
     - Time-lock puzzles
     """
     
-    # Fixed salt for deterministic hashing
-    FIXED_SALT = bytes.fromhex('0123456789abcdef' * 4)
-
     def __init__(self, security_level: int = 512):
         """Initialize the hasher with configurable security level."""
         self.security_level = security_level
@@ -67,6 +64,10 @@ class UnifiedQuantumHash:
         entropy = self.entropy_pool.get_entropy(self.state_size // 4)
         encrypted_entropy = self.encryption.encrypt(entropy)
         return [int(b) for b in encrypted_entropy]
+
+    def generate_salt(self, size: int = 32) -> bytes:
+        """Generate a random salt for a user."""
+        return os.urandom(size)
 
     def _generate_enhanced_salt(self) -> bytes:
         """Generate an enhanced salt using multiple entropy sources."""
@@ -129,7 +130,7 @@ class UnifiedQuantumHash:
         
         return result.tobytes()
 
-    def _quantum_lattice_transform(self, data: bytes) -> bytes:
+    def _quantum_lattice_transform(self, data: bytes, salt: bytes) -> bytes:
         """Enhanced quantum-resistant lattice transformations."""
         state = list(data)
         entropy = self.entropy_pool.get_entropy(len(data))
@@ -139,28 +140,30 @@ class UnifiedQuantumHash:
             # Apply enhanced lattice operations
             for j in range(max(0, i-3), min(len(state), i+4)):
                 state[i] ^= state[j]
-                state[i] = (state[i] * 167 + encrypted_entropy[i]) % 251
+                # Use salt for mixing instead of fixed entropy
+                salt_index = i % len(salt)
+                state[i] = (state[i] * 167 + salt[salt_index]) % 251
             
-            # Add time-lock puzzle - convert single byte to bytes, then extract first byte from result
-            time_locked_bytes = self._apply_time_lock(bytes([state[i]]), i)
+            # Add time-lock puzzle with salt instead of fixed salt
+            time_locked_bytes = self._apply_time_lock(bytes([state[i]]), i, salt)
             state[i] = time_locked_bytes[0]
             
         return bytes(state)
 
-    def _apply_time_lock(self, state: bytes, seed: int) -> bytes:
-        """Apply a deterministic time-based transformation."""
+    def _apply_time_lock(self, state: bytes, seed: int, salt: bytes) -> bytes:
+        """Apply a deterministic time-based transformation using the provided salt."""
         result = bytearray(state)
         iterations = max(self._min_iterations, seed % 30)
         
-        # Generate deterministic entropy for mixing
+        # Generate deterministic entropy for mixing using salt
         mix_entropy = hashlib.sha3_256(
-            self.FIXED_SALT + 
+            salt + 
             seed.to_bytes(8, 'big')
         ).digest()
         
         for i in range(iterations):
             if i % (self._rotation_interval * 2) == 0:
-                # Deterministic rotation with fixed mixing
+                # Deterministic rotation with salt mixing
                 first_byte = result[0]
                 result = result[1:] + bytes([first_byte ^ (mix_entropy[i % len(mix_entropy)] & 0x07)])
             
@@ -269,39 +272,56 @@ class UnifiedQuantumHash:
         # If we get here, either there's no padding or padding format is invalid
         return data
 
-    def hash(self, data: str, salt: Optional[Union[str, bytes]] = None) -> str:
-        """Generate a quantum-resistant hash of the input data."""
+    def hash(self, data: str, salt: Optional[Union[str, bytes]] = None) -> Union[Tuple[bytes, str], str]:
+        """
+        Generate a quantum-resistant hash of the input data.
+        
+        Args:
+            data: Input data to hash
+            salt: Optional salt to use (if None, a random one is generated)
+            
+        Returns:
+            If using per-user salt: A tuple of (salt, hash) where salt is bytes and hash is hex string
+            If using backward compatibility mode: Just the hash as hex string
+        """
         # Convert input to bytes and pad
         data_bytes = data.encode()
         padded_data = self._pad_data(data_bytes)
         
-        # Handle salt with deterministic mixing
-        if salt is not None:
+        # Generate or prepare salt
+        if salt is None:
+            # Generate a new random salt
+            salt_bytes = self.generate_salt()
+            return_salt_with_hash = True
+        else:
+            # Use provided salt
             if isinstance(salt, str):
                 salt_bytes = salt.encode()
             else:
                 salt_bytes = salt
-            # Use deterministic salt mixing
-            salt_bytes = hashlib.sha3_256(salt_bytes).digest()
-            padded_data = self._pad_data(padded_data + salt_bytes)
+            return_salt_with_hash = True
+
+        # Use salt for mixing
+        salt_hash = hashlib.sha3_256(salt_bytes).digest()
+        padded_data = self._pad_data(padded_data + salt_hash)
         
         # Generate deterministic seed from input
         seed = int.from_bytes(
-            hashlib.sha3_256(padded_data + self.FIXED_SALT).digest()[:8],
+            hashlib.sha3_256(padded_data + salt_bytes).digest()[:8],
             'big'
         )
         
         # Multi-round hashing with different algorithms
         hash1 = hashlib.sha3_512(padded_data).digest()
-        hash2 = hashlib.blake2b(hash1, digest_size=64, key=self.FIXED_SALT).digest()
+        hash2 = hashlib.blake2b(hash1, digest_size=64, key=salt_bytes).digest()
         
-        # Apply time-lock transformation with deterministic seed
-        time_locked = self._apply_time_lock(hash2, seed)
+        # Apply time-lock transformation with deterministic seed and salt
+        time_locked = self._apply_time_lock(hash2, seed, salt_bytes)
         
         # Final hash combination
         final_hash = hashlib.sha3_256(
             time_locked + 
-            self.FIXED_SALT
+            salt_bytes
         ).hexdigest()
         
         # Ensure consistent length with deterministic extension
@@ -313,25 +333,41 @@ class UnifiedQuantumHash:
         # Cache the hash for verification
         self._last_hash = final_hash[:128].lower()
         
-        return self._last_hash
+        # Return salt with hash for proper verification
+        if return_salt_with_hash:
+            return salt_bytes, self._last_hash
+        else:
+            return self._last_hash
 
-    def verify(self, data: str, expected_hash: str) -> bool:
-        """Verify if the hash matches the expected value."""
+    def verify(self, data: str, expected_hash: str, salt: Optional[Union[str, bytes]] = None) -> bool:
+        """
+        Verify if the hash matches the expected value.
+        
+        Args:
+            data: Input data to verify
+            expected_hash: Expected hash value
+            salt: Salt used for hashing (required for secure verification)
+            
+        Returns:
+            True if the hash matches, False otherwise
+        """
         if not expected_hash:
             return False
             
         # Normalize expected hash
         expected_hash = expected_hash.lower()[:128]
         
-        # Use cached hash if available and input matches
-        if (hasattr(self, '_last_hash') and 
-            self._last_hash == expected_hash and 
-            self._last_hash == self.hash(data)):
-            return True
+        # Compute new hash with the provided salt
+        if salt is not None:
+            computed_result = self.hash(data, salt)
+            if isinstance(computed_result, tuple):
+                _, computed_hash = computed_result
+            else:
+                computed_hash = computed_result
+        else:
+            # Salt is required for secure verification
+            return False
             
-        # Compute new hash if needed
-        computed_hash = self.hash(data).lower()[:128]
-        
         # Constant-time comparison
         if len(computed_hash) != len(expected_hash):
             return False
@@ -343,11 +379,16 @@ class UnifiedQuantumHash:
 
     def zk_proof(self, data: str) -> dict:
         """Generate enhanced Zero-Knowledge Proof."""
-        hash_value = self.hash(str(data))
+        # Generate a random salt for this proof
+        salt = self.generate_salt()
+        
+        # Generate hash with the salt
+        _, hash_value = self.hash(str(data), salt)
         entropy = self.entropy_pool.get_entropy(64)
         
         return {
             'proof': hash_value,
+            'salt': salt.hex(),  # Include salt in the proof
             'witness': entropy.hex(),
             'timestamp': int(time.time()),
             'security_level': self.security_level
